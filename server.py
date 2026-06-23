@@ -24,9 +24,18 @@ import os
 import sys
 import re
 import glob
+import ssl
 import webbrowser
 import urllib.request
 from urllib.parse import urlparse
+
+# Packaged (PyInstaller) Python has no system CA bundle, so HTTPS verification
+# fails ("CERTIFICATE_VERIFY_FAILED"). Ship certifi's CA bundle and use it.
+try:
+    import certifi
+    SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
+except Exception:
+    SSL_CONTEXT = ssl.create_default_context()
 
 # ----------------------------------------------------------------------------
 # Paths — work both as a plain script and when frozen by PyInstaller.
@@ -171,7 +180,7 @@ def download_model(name):
         DL.update(active=True, name=name, pct=0, done=False, error=None)
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "WhisperTranscript"})
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=30, context=SSL_CONTEXT) as resp:
             total = int(resp.headers.get("Content-Length", "0"))
             got = 0
             with open(part, "wb") as f:
