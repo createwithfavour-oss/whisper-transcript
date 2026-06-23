@@ -8,134 +8,144 @@
 <link rel="apple-touch-icon" href="/favicon.png">
 <style>
   :root {
-    --bg: #0e0f13;
-    --panel: #181a21;
-    --panel-2: #1f222b;
-    --border: #2a2e3a;
-    --text: #e8eaf0;
-    --muted: #9aa0b0;
-    --accent: #5b8cff;
-    --accent-2: #7aa2ff;
-    --good: #4ade80;
-    --bad: #f87171;
-    --radius: 14px;
+    --bg: #FAF8F3;
+    --surface: #FFFDF9;
+    --inset: #F4F0E8;
+    --text: #2C2A26;
+    --muted: #8C867B;
+    --faint: #A8A296;
+    --border: #E7E1D6;
+    --border-strong: #D9D2C4;
+    --accent: #5B54F0;
+    --accent-deep: #4842cf;
+    --accent-soft: #ECEBFD;
+    --good: #4E9A6B;
+    --bad: #C2553D;
+    --radius: 16px;
+    --radius-sm: 10px;
+    --serif: ui-serif, "New York", Georgia, "Times New Roman", serif;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0; background: var(--bg); color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     min-height: 100vh; display: flex; flex-direction: column; align-items: center;
-    padding: 40px 20px;
+    padding: 56px 20px; -webkit-font-smoothing: antialiased;
   }
-  .wrap { width: 100%; max-width: 720px; }
-  header { margin-bottom: 28px; }
-  h1 { font-size: 22px; margin: 0 0 4px; font-weight: 600; letter-spacing: -0.01em; }
-  .sub { color: var(--muted); font-size: 14px; }
-  .status-bar {
-    display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px;
-    font-size: 12.5px; color: var(--muted);
+  .wrap { width: 100%; max-width: 640px; }
+  header { margin-bottom: 30px; }
+  .brand { display: flex; align-items: center; gap: 11px; margin-bottom: 18px; }
+  .brand .mark { flex: none; display: block; border-radius: 7px; }
+  .brand .word { font-family: var(--serif); font-size: 19px; font-weight: 500; letter-spacing: -0.01em; }
+  h1 {
+    font-family: var(--serif); font-size: 30px; line-height: 1.18;
+    letter-spacing: -0.02em; font-weight: 500; margin: 0 0 10px;
   }
+  .sub { color: var(--muted); font-size: 15px; line-height: 1.6; max-width: 30em; }
+  .status-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 20px; font-size: 12.5px; }
   .status-bar .pill {
-    display: inline-flex; align-items: center; gap: 6px;
-    background: var(--panel); border: 1px solid var(--border);
-    padding: 5px 10px; border-radius: 999px;
+    display: inline-flex; align-items: center; gap: 7px; color: var(--muted);
+    background: var(--surface); border: 1px solid var(--border);
+    padding: 5px 12px; border-radius: 999px;
   }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
   .dot.ok { background: var(--good); }
   .dot.no { background: var(--bad); }
 
   .drop {
-    border: 1.5px dashed var(--border); border-radius: var(--radius);
-    background: var(--panel); padding: 48px 24px; text-align: center;
-    cursor: pointer; transition: all .15s ease;
+    border: 1.5px dashed var(--border-strong); border-radius: var(--radius);
+    background: var(--inset); padding: 52px 24px; text-align: center;
+    cursor: pointer; transition: border-color .15s ease, background .15s ease;
   }
-  .drop:hover { border-color: var(--accent); background: var(--panel-2); }
-  .drop.over { border-color: var(--accent); background: #1b2233; transform: scale(1.005); }
-  .drop .icon { font-size: 38px; margin-bottom: 12px; opacity: .9; }
-  .drop .big { font-size: 17px; font-weight: 500; margin-bottom: 6px; }
+  .drop:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+  .drop .ic { color: var(--faint); margin-bottom: 14px; }
+  .drop .big { font-size: 16px; font-weight: 500; margin-bottom: 5px; color: var(--text); }
   .drop .small { color: var(--muted); font-size: 13px; }
-  .browse { color: var(--accent-2); text-decoration: underline; }
+  .browse { color: var(--accent); }
 
   .card {
-    background: var(--panel); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 22px; margin-top: 22px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 24px; margin-top: 22px;
   }
-  .filerow { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .filerow { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
   .filerow .name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .filerow .meta { color: var(--muted); font-size: 12.5px; margin-left: auto; white-space: nowrap; }
 
-  .bar { height: 8px; background: var(--panel-2); border-radius: 999px; overflow: hidden; }
-  .bar > i {
-    display: block; height: 100%; width: 0%;
-    background: linear-gradient(90deg, var(--accent), var(--accent-2));
-    border-radius: 999px; transition: width .3s ease;
-  }
-  .phase { font-size: 13px; color: var(--muted); margin-top: 10px; display:flex; gap:8px; align-items:center;}
+  .bar { height: 7px; background: var(--inset); border-radius: 999px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; width: 0%; background: var(--accent); border-radius: 999px; transition: width .3s ease; }
+  .phase { font-size: 13px; color: var(--muted); margin-top: 12px; display:flex; gap:8px; align-items:center; }
   .spinner {
-    width: 13px; height: 13px; border: 2px solid var(--border);
-    border-top-color: var(--accent); border-radius: 50%;
-    animation: spin .8s linear infinite;
+    width: 13px; height: 13px; border: 2px solid var(--border-strong);
+    border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  .err { color: var(--bad); font-size: 13.5px; white-space: pre-wrap; line-height:1.5; }
+  .err { color: var(--bad); font-size: 13.5px; white-space: pre-wrap; line-height: 1.5; margin-top: 10px; }
 
-  .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
   .tab {
-    padding: 7px 14px; border-radius: 9px; border: 1px solid var(--border);
-    background: var(--panel-2); color: var(--muted); cursor: pointer; font-size: 13px;
+    padding: 7px 15px; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--muted); cursor: pointer; font-size: 13px;
   }
-  .tab.active { color: var(--text); border-color: var(--accent); background: #1b2233; }
+  .tab.active { color: var(--accent-deep); border-color: var(--accent); background: var(--accent-soft); }
   pre.out {
-    background: #0b0c10; border: 1px solid var(--border); border-radius: 10px;
-    padding: 14px; max-height: 340px; overflow: auto; font-size: 12.5px;
-    line-height: 1.55; white-space: pre-wrap; word-break: break-word; margin: 0;
-    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+    background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 16px; max-height: 360px; overflow: auto; font-size: 12.5px;
+    line-height: 1.65; white-space: pre-wrap; word-break: break-word; margin: 0;
+    color: var(--text); font-family: "SF Mono", ui-monospace, Menlo, monospace;
   }
-  .actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+  .actions { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
   button.btn, a.btn {
-    appearance: none; border: 1px solid var(--border); background: var(--panel-2);
-    color: var(--text); padding: 9px 16px; border-radius: 10px; font-size: 13.5px;
+    appearance: none; border: 1px solid var(--border-strong); background: var(--surface);
+    color: var(--text); padding: 9px 16px; border-radius: var(--radius-sm); font-size: 13.5px;
     cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 7px;
-    transition: all .12s ease;
+    transition: border-color .12s ease, background .12s ease;
   }
-  button.btn:hover, a.btn:hover { border-color: var(--accent); background: #1b2233; }
+  button.btn:hover, a.btn:hover { border-color: var(--accent); background: var(--accent-soft); }
   .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .btn.primary:hover { background: var(--accent-2); }
-  .btn.ghost { background: transparent; }
-  footer { margin-top: 30px; color: var(--muted); font-size: 12px; text-align: center; }
+  .btn.primary:hover { background: var(--accent-deep); border-color: var(--accent-deep); }
+  .btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  .btn.ghost:hover { background: var(--inset); border-color: transparent; }
+  footer { margin-top: 36px; color: var(--faint); font-size: 12.5px; text-align: center; }
   input[type=file] { display: none; }
 
-  .pick-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
-  .pick-sub { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+  .pick-title { font-family: var(--serif); font-size: 19px; font-weight: 500; margin-bottom: 5px; }
+  .pick-sub { color: var(--muted); font-size: 13.5px; line-height: 1.6; margin-bottom: 18px; }
   .model-list { display: flex; flex-direction: column; gap: 10px; }
   .model-card {
-    display: flex; align-items: center; gap: 14px; padding: 14px 16px;
-    border: 1px solid var(--border); border-radius: 12px; background: var(--panel-2);
+    display: flex; align-items: center; gap: 14px; padding: 15px 16px;
+    border: 1px solid var(--border); border-radius: 12px; background: var(--bg);
   }
   .model-card .mc-main { flex: 1; min-width: 0; }
   .model-card .mc-name { font-weight: 500; }
-  .model-card .mc-name .rec { color: var(--accent-2); font-size: 11px; margin-left: 6px; }
-  .model-card .mc-note { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
-  .model-card .mc-size { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+  .model-card .mc-name .rec { color: var(--accent); font-size: 11px; margin-left: 7px; }
+  .model-card .mc-note { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
+  .model-card .mc-size { color: var(--faint); font-size: 12.5px; white-space: nowrap; }
   .model-card .mc-active { color: var(--good); font-size: 12.5px; font-weight: 500; white-space: nowrap; }
-  .pick-back { margin-top: 14px; }
-  .pick-back a { color: var(--accent-2); font-size: 13px; cursor: pointer; }
-  .model-badge { text-align: center; color: var(--muted); font-size: 12.5px; margin-top: 14px; }
-  .model-badge a { color: var(--accent-2); }
+  .pick-back { margin-top: 16px; }
+  .pick-back a { color: var(--accent); font-size: 13px; cursor: pointer; }
+  .model-badge { text-align: center; color: var(--muted); font-size: 12.5px; margin-top: 16px; }
+  .model-badge a { color: var(--accent); cursor: pointer; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>🎙️ Whisper Transcript</h1>
-    <div class="sub">Drop a video or audio file. Get an SRT and a timestamped Markdown transcript — all local, on your machine.</div>
+    <div class="brand">
+      <img class="mark" src="/favicon.png" width="30" height="30" alt="Whisper Transcript logo">
+      <span class="word">Whisper Transcript</span>
+    </div>
+    <h1>Turn any video<br>into a transcript.</h1>
+    <div class="sub">Drop a video or audio file. Get subtitles and a timestamped transcript — all on your computer, nothing uploaded.</div>
     <div class="status-bar" id="statusBar"></div>
   </header>
 
   <div id="drop" class="drop">
-    <div class="icon">📁</div>
-    <div class="big">Drag &amp; drop a video here</div>
+    <svg class="ic" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M10 9l5 3-5 3z" fill="currentColor" stroke="none"/>
+    </svg>
+    <div class="big">Drag a video here</div>
     <div class="small">or <span class="browse">browse to choose a file</span> · mp4, mov, mkv, mp3, wav, m4a…</div>
   </div>
   <input type="file" id="fileInput" accept="video/*,audio/*">
@@ -143,7 +153,7 @@
 
   <div id="modelPicker" class="card" style="display:none;">
     <div class="pick-title">Choose a transcription model</div>
-    <div class="pick-sub">Downloads once to your machine, then runs fully offline. Bigger = more accurate but larger and slower.</div>
+    <div class="pick-sub">Downloads once to your computer, then runs fully offline. Bigger = more accurate, but a larger download and a bit slower.</div>
     <div id="modelList" class="model-list"></div>
     <div class="pick-back" id="pickBack" style="display:none;"><a id="pickBackLink">← back</a></div>
   </div>
@@ -176,14 +186,14 @@
     <pre class="out" id="outMd"></pre>
     <pre class="out" id="outSrt" style="display:none;"></pre>
     <div class="actions">
-      <a class="btn primary" id="dlMd" download>⬇︎ Download .md</a>
-      <a class="btn" id="dlSrt" download>⬇︎ Download .srt</a>
+      <a class="btn primary" id="dlMd" download>↓ Download .md</a>
+      <a class="btn" id="dlSrt" download>↓ Download .srt</a>
       <button class="btn ghost" id="copyBtn">Copy current view</button>
       <button class="btn ghost" id="againBtn">Transcribe another</button>
     </div>
   </div>
 
-  <footer>Runs <strong>whisper.cpp</strong> on your local model · nothing leaves this machine.</footer>
+  <footer>Runs on your computer · nothing leaves this machine.</footer>
 </div>
 
 <script>
