@@ -27,10 +27,14 @@ No installation, no accounts, no Python — just download, unzip, and open.
 3. First time only: Windows may show a blue **"Windows protected your PC"** box. Click **More info → Run anyway**. (This appears because the app isn't code-signed yet — it's safe.)
 4. A small black window opens (that's the engine — leave it open) and your browser opens automatically.
 
-**Mac**
+**Mac** (first time only)
 1. Unzip `WhisperTranscript-macOS.zip`.
-2. **Right-click** `Whisper Transcript.app` → **Open** → **Open**. (First time only. macOS blocks double-clicking unsigned apps, but right-click → Open works. After this, you can open it normally.)
-3. Your browser opens automatically.
+2. Double-click `Whisper Transcript.app`. macOS will say it *"cannot be verified."* Click **Done** (do **not** click "Move to Bin").
+3. Open the Apple menu () → **System Settings** → **Privacy & Security**.
+4. Scroll down to the **Security** section. You'll see a line saying *"Whisper Transcript" was blocked…* — click **Open Anyway**, then confirm with your password or Touch ID.
+5. The app opens and your browser opens automatically. You only do this once — after that, just double-click to open it normally.
+
+> Why the warning? The app isn't signed with a paid Apple certificate yet. It's safe — macOS just can't auto-verify unsigned apps.
 
 ### 2. Pick a model (first launch only)
 
