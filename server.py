@@ -31,11 +31,20 @@ from urllib.parse import urlparse
 
 # Packaged (PyInstaller) Python has no system CA bundle, so HTTPS verification
 # fails ("CERTIFICATE_VERIFY_FAILED"). Ship certifi's CA bundle and use it.
-try:
-    import certifi
-    SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
-except Exception:
-    SSL_CONTEXT = ssl.create_default_context()
+# Built lazily — creating the context can take several seconds, and there's no
+# reason to pay that at startup when it's only needed for model downloads.
+_SSL_CONTEXT = None
+
+
+def ssl_context():
+    global _SSL_CONTEXT
+    if _SSL_CONTEXT is None:
+        try:
+            import certifi
+            _SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
+        except Exception:
+            _SSL_CONTEXT = ssl.create_default_context()
+    return _SSL_CONTEXT
 
 # ----------------------------------------------------------------------------
 # Paths — work both as a plain script and when frozen by PyInstaller.
@@ -68,6 +77,14 @@ STATIC_DIR = os.path.join(RES_DIR, "static")
 CONFIG_PATH = os.path.join(DATA_HOME, "config.json")
 PORT = int(os.environ.get("PORT", "8756"))
 HOST = "127.0.0.1"
+
+# Hardening limits.
+MAX_UPLOAD_BYTES = 8 * 1024 * 1024 * 1024   # reject uploads larger than 8 GB
+MAX_JSON_BYTES = 64 * 1024                   # control-plane JSON bodies are tiny
+MAX_JOBS = 50                                # cap in-memory job history
+MODEL_MIN_BYTES = 20 * 1024 * 1024           # a real model is bigger than this
+# Only answer requests addressed to the loopback host (anti DNS-rebinding).
+ALLOWED_HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}", "127.0.0.1", "localhost"}
 
 for d in (UPLOADS_DIR, OUTPUTS_DIR, MODELS_DIR):
     os.makedirs(d, exist_ok=True)
@@ -131,6 +148,17 @@ DL = {"active": False, "name": None, "pct": 0, "done": False, "error": None}
 DL_LOCK = threading.Lock()
 
 
+def model_filename(name):
+    return f"ggml-{name}.bin"
+
+
+def safe_filename(name, fallback="upload"):
+    """Whitelist a user-supplied name down to a safe, separator-free basename."""
+    name = os.path.basename(name or "")
+    cleaned = re.sub(r"[^A-Za-z0-9 ._-]", "_", name).strip(" .")
+    return cleaned or fallback
+
+
 def _read_config():
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
@@ -151,7 +179,7 @@ def installed_models():
     """Basenames of fully-downloaded models (ignores .part files)."""
     out = []
     for b in sorted(glob.glob(os.path.join(MODELS_DIR, "ggml-*.bin"))):
-        if os.path.getsize(b) > 20 * 1024 * 1024:
+        if os.path.getsize(b) > MODEL_MIN_BYTES:
             out.append(os.path.basename(b))
     return out
 
@@ -172,15 +200,15 @@ def find_model():
 
 def download_model(name):
     """Background worker: fetch ggml-<name>.bin from Hugging Face with progress."""
-    url = HF_BASE + f"ggml-{name}.bin"
-    dest = os.path.join(MODELS_DIR, f"ggml-{name}.bin")
+    url = HF_BASE + model_filename(name)
+    dest = os.path.join(MODELS_DIR, model_filename(name))
     part = dest + ".part"
     had_models = bool(installed_models())  # true first-run download auto-activates
     with DL_LOCK:
         DL.update(active=True, name=name, pct=0, done=False, error=None)
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "WhisperTranscript"})
-        with urllib.request.urlopen(req, timeout=30, context=SSL_CONTEXT) as resp:
+        with urllib.request.urlopen(req, timeout=30, context=ssl_context()) as resp:
             total = int(resp.headers.get("Content-Length", "0"))
             got = 0
             with open(part, "wb") as f:
@@ -198,7 +226,7 @@ def download_model(name):
         # hijack the user's current selection (they click "Use" to switch).
         if not had_models:
             cfg = _read_config()
-            cfg["model"] = f"ggml-{name}.bin"
+            cfg["model"] = model_filename(name)
             _write_config(cfg)
         with DL_LOCK:
             DL.update(active=False, pct=100, done=True)
@@ -324,12 +352,14 @@ def stream_multipart_file(rfile, content_length, boundary, dest_path):
 
 def set_job(job_id, **kwargs):
     with JOBS_LOCK:
-        JOBS[job_id].update(kwargs)
+        if job_id in JOBS:
+            JOBS[job_id].update(kwargs)
 
 
 def append_log(job_id, msg):
     with JOBS_LOCK:
-        JOBS[job_id]["log"].append(msg)
+        if job_id in JOBS:
+            JOBS[job_id]["log"].append(msg)
 
 
 def run_job(job_id, video_path, original_name):
@@ -356,12 +386,19 @@ def run_job(job_id, video_path, original_name):
         set_job(job_id, status="extracting", progress=2, model=os.path.basename(model))
         append_log(job_id, "Extracting audio with ffmpeg…")
 
-        # 1) Extract 16kHz mono PCM wav
-        ff = subprocess.run(
-            [FFMPEG, "-y", "-i", video_path, "-ar", "16000", "-ac", "1",
-             "-c:a", "pcm_s16le", wav_path],
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-        )
+        # 1) Extract 16kHz mono PCM wav (audio extraction is fast even for long
+        # files; a 2h ceiling just stops a wedged process from hanging forever).
+        try:
+            ff = subprocess.run(
+                [FFMPEG, "-y", "-i", video_path, "-ar", "16000", "-ac", "1",
+                 "-c:a", "pcm_s16le", wav_path],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                timeout=7200,
+            )
+        except subprocess.TimeoutExpired:
+            set_job(job_id, status="error",
+                    error="Audio extraction took too long and was stopped.")
+            return
         if ff.returncode != 0 or not os.path.exists(wav_path):
             tail = "\n".join(ff.stdout.splitlines()[-15:])
             set_job(job_id, status="error",
@@ -386,15 +423,11 @@ def run_job(job_id, video_path, original_name):
                                 stderr=subprocess.STDOUT, text=True, bufsize=1)
         prog_re = re.compile(r"progress\s*=\s*(\d+)%")
         for line in proc.stdout:
-            line = line.rstrip()
             m = prog_re.search(line)
             if m:
                 pct = int(m.group(1))
                 # map whisper's 0-100 onto 5-99
                 set_job(job_id, progress=5 + int(pct * 0.94))
-            elif line and not line.startswith(("ggml_", "load_backend", "whisper_")):
-                # surface meaningful lines, skip the noisy GPU init logs
-                pass
         proc.wait()
 
         srt_path = out_prefix + ".srt"
@@ -422,7 +455,9 @@ def run_job(job_id, video_path, original_name):
                 download_base=f"{safe_base}")
 
     except Exception as e:  # noqa
-        set_job(job_id, status="error", error=f"Unexpected error: {e}")
+        sys.stderr.write(f"[whisper-transcript] job {job_id} failed: {e}\n")
+        set_job(job_id, status="error",
+                error="Something went wrong while processing this file.")
     finally:
         # clean intermediate wav + uploaded video to save space
         for p in (wav_path, video_path):
@@ -448,16 +483,30 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _send_text(self, text, code=200, content_type="text/plain; charset=utf-8"):
-        body = text.encode("utf-8")
-        self.send_response(code)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+    def _guard(self):
+        """Reject DNS-rebinding and cross-site requests against this local server.
+
+        The app is meant to be driven only by its own page on 127.0.0.1, so we
+        require a loopback Host header and refuse anything a browser marks as a
+        cross-site request (CSRF) or that carries a non-local Origin.
+        """
+        if self.headers.get("Host", "") not in ALLOWED_HOSTS:
+            self._send_json({"error": "forbidden"}, 403)
+            return False
+        if (self.headers.get("Sec-Fetch-Site") or "same-origin") not in (
+                "same-origin", "same-site", "none"):
+            self._send_json({"error": "cross-site request blocked"}, 403)
+            return False
+        origin = self.headers.get("Origin")
+        if origin and urlparse(origin).hostname not in ("127.0.0.1", "localhost"):
+            self._send_json({"error": "bad origin"}, 403)
+            return False
+        return True
 
     # ---- GET ----
     def do_GET(self):
+        if not self._guard():
+            return
         path = urlparse(self.path).path
 
         if path == "/" or path == "/index.html":
@@ -506,9 +555,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "label": m["label"],
                 "size_mb": m["size_mb"],
                 "note": m["note"],
-                "filename": f"ggml-{m['name']}.bin",
-                "installed": f"ggml-{m['name']}.bin" in installed,
-                "active": f"ggml-{m['name']}.bin" == active_name,
+                "filename": model_filename(m["name"]),
+                "installed": model_filename(m["name"]) in installed,
+                "active": model_filename(m["name"]) == active_name,
             } for m in MODEL_CATALOG]
             self._send_json({"current": active_name, "catalog": catalog,
                              "download": dl_state()})
@@ -568,7 +617,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     # ---- POST ----
     def _read_json_body(self):
         length = int(self.headers.get("Content-Length", "0"))
-        if length <= 0:
+        if length <= 0 or length > MAX_JSON_BYTES:
             return {}
         try:
             return json.loads(self.rfile.read(length).decode("utf-8"))
@@ -576,6 +625,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return {}
 
     def do_POST(self):
+        if not self._guard():
+            return
         path = urlparse(self.path).path
 
         if path == "/download_model":
@@ -621,17 +672,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return
         boundary = m.group(1).strip().strip('"')
         content_length = int(self.headers.get("Content-Length", "0"))
+        if content_length > MAX_UPLOAD_BYTES:
+            self._send_json({"error": "file is too large"}, 413)
+            return
 
         job_id = uuid.uuid4().hex[:12]
         tmp_dest = os.path.join(UPLOADS_DIR, f"{job_id}__upload")
         try:
             original_name = stream_multipart_file(
                 self.rfile, content_length, boundary, tmp_dest)
-        except Exception as e:  # noqa
-            self._send_json({"error": f"upload failed: {e}"}, 400)
+        except Exception:  # noqa
+            self._send_json({"error": "upload failed"}, 400)
             return
 
-        dest = os.path.join(UPLOADS_DIR, f"{job_id}__{original_name}")
+        # Build the on-disk path from a sanitized name (never trust the filename).
+        dest = os.path.join(UPLOADS_DIR, f"{job_id}__{safe_filename(original_name, 'video')}")
         try:
             os.replace(tmp_dest, dest)
         except OSError:
@@ -640,6 +695,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         with JOBS_LOCK:
             JOBS[job_id] = {"status": "queued", "progress": 0, "log": [],
                             "name": original_name}
+            # Evict oldest jobs so the in-memory store can't grow without bound.
+            while len(JOBS) > MAX_JOBS:
+                JOBS.pop(next(iter(JOBS)))
 
         t = threading.Thread(target=run_job, args=(job_id, dest, original_name),
                              daemon=True)

@@ -26,10 +26,9 @@ import os
 import sys
 import shutil
 import zipfile
-import tarfile
+import hashlib
 import subprocess
 import urllib.request
-import glob
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 BIN = os.path.join(ROOT, "bin")
@@ -38,12 +37,20 @@ IS_WIN = os.name == "nt"
 IS_MAC = sys.platform == "darwin"
 EXE = ".exe" if IS_WIN else ""
 
+# Pin whisper.cpp to a release tag so every build is reproducible and we never
+# ship whatever happens to be on master that day.
 WHISPER_REPO = "https://github.com/ggerganov/whisper.cpp"
+WHISPER_TAG = "v1.9.1"
 
-# Static ffmpeg downloads (single self-contained binary).
+# Static ffmpeg downloads (single self-contained binary), pinned by SHA-256.
+# These hashes pin the CURRENT upstream build. If upstream publishes a new one,
+# the build fails loudly with a checksum mismatch (a tamper-evident signal) —
+# download the new file, confirm it's legitimate, and update the hash here.
 FFMPEG_MAC = "https://evermeet.cx/ffmpeg/getrelease/zip"
+FFMPEG_MAC_SHA256 = "e91df72a1ee7c26606f90dd2dd4dcccc6a75140ff9ea6fdd50faae828b82ba69"
 FFMPEG_WIN = ("https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/"
               "ffmpeg-master-latest-win64-lgpl.zip")
+FFMPEG_WIN_SHA256 = "9e2c17188ffbcc35f03d4f3e27f3844dec3075d4da686c67917d3b027f5bee1a"
 
 
 def run(cmd, **kw):
@@ -57,11 +64,25 @@ def fresh_dir(p):
     os.makedirs(p, exist_ok=True)
 
 
-def download(url, dest):
+def download(url, dest, sha256=None):
     print(f"downloading {url}")
     req = urllib.request.Request(url, headers={"User-Agent": "WhisperTranscript-build"})
     with urllib.request.urlopen(req, timeout=120) as r, open(dest, "wb") as f:
         shutil.copyfileobj(r, f)
+    if sha256:
+        h = hashlib.sha256()
+        with open(dest, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+        got = h.hexdigest()
+        if got != sha256:
+            raise SystemExit(
+                f"CHECKSUM MISMATCH for {url}\n"
+                f"  expected {sha256}\n"
+                f"  got      {got}\n"
+                "Upstream likely published a new build. Verify it is legitimate, "
+                "then update the pinned hash in build.py.")
+        print(f"  sha256 OK ({got[:16]}…)")
 
 
 def find_one(root, name):
@@ -76,7 +97,7 @@ def build_whisper():
     print("=== building whisper.cpp (static) ===")
     src = os.path.join(WORK, "whisper.cpp")
     fresh_dir(WORK)
-    run(["git", "clone", "--depth", "1", WHISPER_REPO, src])
+    run(["git", "clone", "--depth", "1", "--branch", WHISPER_TAG, WHISPER_REPO, src])
     bld = os.path.join(src, "build")
     cfg = [
         "cmake", "-S", src, "-B", bld,
@@ -103,8 +124,9 @@ def build_whisper():
 def fetch_ffmpeg():
     print("=== fetching static ffmpeg ===")
     url = FFMPEG_WIN if IS_WIN else FFMPEG_MAC
+    sha = FFMPEG_WIN_SHA256 if IS_WIN else FFMPEG_MAC_SHA256
     arc = os.path.join(WORK, "ffmpeg_dl.zip")
-    download(url, arc)
+    download(url, arc, sha256=sha)
     ex = os.path.join(WORK, "ffmpeg_extract")
     fresh_dir(ex)
     with zipfile.ZipFile(arc) as z:
