@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Whisper Transcript</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/favicon.png">
+<style>
+  :root {
+    --bg: #0e0f13;
+    --panel: #181a21;
+    --panel-2: #1f222b;
+    --border: #2a2e3a;
+    --text: #e8eaf0;
+    --muted: #9aa0b0;
+    --accent: #5b8cff;
+    --accent-2: #7aa2ff;
+    --good: #4ade80;
+    --bad: #f87171;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+    padding: 40px 20px;
+  }
+  .wrap { width: 100%; max-width: 720px; }
+  header { margin-bottom: 28px; }
+  h1 { font-size: 22px; margin: 0 0 4px; font-weight: 600; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); font-size: 14px; }
+  .status-bar {
+    display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px;
+    font-size: 12.5px; color: var(--muted);
+  }
+  .status-bar .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--panel); border: 1px solid var(--border);
+    padding: 5px 10px; border-radius: 999px;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: var(--good); }
+  .dot.no { background: var(--bad); }
+
+  .drop {
+    border: 1.5px dashed var(--border); border-radius: var(--radius);
+    background: var(--panel); padding: 48px 24px; text-align: center;
+    cursor: pointer; transition: all .15s ease;
+  }
+  .drop:hover { border-color: var(--accent); background: var(--panel-2); }
+  .drop.over { border-color: var(--accent); background: #1b2233; transform: scale(1.005); }
+  .drop .icon { font-size: 38px; margin-bottom: 12px; opacity: .9; }
+  .drop .big { font-size: 17px; font-weight: 500; margin-bottom: 6px; }
+  .drop .small { color: var(--muted); font-size: 13px; }
+  .browse { color: var(--accent-2); text-decoration: underline; }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 22px; margin-top: 22px;
+  }
+  .filerow { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .filerow .name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .filerow .meta { color: var(--muted); font-size: 12.5px; margin-left: auto; white-space: nowrap; }
+
+  .bar { height: 8px; background: var(--panel-2); border-radius: 999px; overflow: hidden; }
+  .bar > i {
+    display: block; height: 100%; width: 0%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    border-radius: 999px; transition: width .3s ease;
+  }
+  .phase { font-size: 13px; color: var(--muted); margin-top: 10px; display:flex; gap:8px; align-items:center;}
+  .spinner {
+    width: 13px; height: 13px; border: 2px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .err { color: var(--bad); font-size: 13.5px; white-space: pre-wrap; line-height:1.5; }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+  .tab {
+    padding: 7px 14px; border-radius: 9px; border: 1px solid var(--border);
+    background: var(--panel-2); color: var(--muted); cursor: pointer; font-size: 13px;
+  }
+  .tab.active { color: var(--text); border-color: var(--accent); background: #1b2233; }
+  pre.out {
+    background: #0b0c10; border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px; max-height: 340px; overflow: auto; font-size: 12.5px;
+    line-height: 1.55; white-space: pre-wrap; word-break: break-word; margin: 0;
+    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  .actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+  button.btn, a.btn {
+    appearance: none; border: 1px solid var(--border); background: var(--panel-2);
+    color: var(--text); padding: 9px 16px; border-radius: 10px; font-size: 13.5px;
+    cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 7px;
+    transition: all .12s ease;
+  }
+  button.btn:hover, a.btn:hover { border-color: var(--accent); background: #1b2233; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { background: var(--accent-2); }
+  .btn.ghost { background: transparent; }
+  footer { margin-top: 30px; color: var(--muted); font-size: 12px; text-align: center; }
+  input[type=file] { display: none; }
+
+  .pick-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  .pick-sub { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+  .model-list { display: flex; flex-direction: column; gap: 10px; }
+  .model-card {
+    display: flex; align-items: center; gap: 14px; padding: 14px 16px;
+    border: 1px solid var(--border); border-radius: 12px; background: var(--panel-2);
+  }
+  .model-card .mc-main { flex: 1; min-width: 0; }
+  .model-card .mc-name { font-weight: 500; }
+  .model-card .mc-name .rec { color: var(--accent-2); font-size: 11px; margin-left: 6px; }
+  .model-card .mc-note { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+  .model-card .mc-size { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+  .model-card .mc-active { color: var(--good); font-size: 12.5px; font-weight: 500; white-space: nowrap; }
+  .pick-back { margin-top: 14px; }
+  .pick-back a { color: var(--accent-2); font-size: 13px; cursor: pointer; }
+  .model-badge { text-align: center; color: var(--muted); font-size: 12.5px; margin-top: 14px; }
+  .model-badge a { color: var(--accent-2); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🎙️ Whisper Transcript</h1>
+    <div class="sub">Drop a video or audio file. Get an SRT and a timestamped Markdown transcript — all local, on your machine.</div>
+    <div class="status-bar" id="statusBar"></div>
+  </header>
+
+  <div id="drop" class="drop">
+    <div class="icon">📁</div>
+    <div class="big">Drag &amp; drop a video here</div>
+    <div class="small">or <span class="browse">browse to choose a file</span> · mp4, mov, mkv, mp3, wav, m4a…</div>
+  </div>
+  <input type="file" id="fileInput" accept="video/*,audio/*">
+  <div id="modelBadge" class="model-badge" style="display:none;"></div>
+
+  <div id="modelPicker" class="card" style="display:none;">
+    <div class="pick-title">Choose a transcription model</div>
+    <div class="pick-sub">Downloads once to your machine, then runs fully offline. Bigger = more accurate but larger and slower.</div>
+    <div id="modelList" class="model-list"></div>
+    <div class="pick-back" id="pickBack" style="display:none;"><a id="pickBackLink">← back</a></div>
+  </div>
+
+  <div id="modelDownload" class="card" style="display:none;">
+    <div class="filerow">
+      <span class="name" id="dlName">Downloading model…</span>
+      <span class="meta" id="dlMeta"></span>
+    </div>
+    <div class="bar"><i id="dlBar"></i></div>
+    <div class="phase"><span class="spinner"></span> <span id="dlPhase">Starting download…</span></div>
+    <div class="err" id="dlErr" style="display:none;"></div>
+  </div>
+
+  <div id="job" class="card" style="display:none;">
+    <div class="filerow">
+      <span class="name" id="jobName">file.mp4</span>
+      <span class="meta" id="jobMeta"></span>
+    </div>
+    <div class="bar"><i id="barFill"></i></div>
+    <div class="phase" id="phase"><span class="spinner"></span> <span id="phaseText">Starting…</span></div>
+    <div class="err" id="errBox" style="display:none;"></div>
+  </div>
+
+  <div id="result" class="card" style="display:none;">
+    <div class="tabs">
+      <div class="tab active" data-tab="md">Markdown</div>
+      <div class="tab" data-tab="srt">SRT</div>
+    </div>
+    <pre class="out" id="outMd"></pre>
+    <pre class="out" id="outSrt" style="display:none;"></pre>
+    <div class="actions">
+      <a class="btn primary" id="dlMd" download>⬇︎ Download .md</a>
+      <a class="btn" id="dlSrt" download>⬇︎ Download .srt</a>
+      <button class="btn ghost" id="copyBtn">Copy current view</button>
+      <button class="btn ghost" id="againBtn">Transcribe another</button>
+    </div>
+  </div>
+
+  <footer>Runs <strong>whisper.cpp</strong> on your local model · nothing leaves this machine.</footer>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const drop = $("#drop"), fileInput = $("#fileInput");
+const jobCard = $("#job"), resultCard = $("#result");
+const modelPicker = $("#modelPicker"), modelDownload = $("#modelDownload"), modelBadge = $("#modelBadge");
+let poll = null, dlTimer = null, screen = null, manualPicker = false;
+
+function prettyModel(fn){ return (fn||"").replace(/^ggml-/,"").replace(/\.bin$/,""); }
+
+function showScreen(name){
+  screen = name;
+  drop.style.display = name === "drop" ? "block" : "none";
+  modelBadge.style.display = name === "drop" ? "block" : "none";
+  modelPicker.style.display = name === "picker" ? "block" : "none";
+  modelDownload.style.display = name === "download" ? "block" : "none";
+}
+
+// --- status routing: picker (no model) / download / drop (ready) ---
+async function refreshStatus() {
+  let s;
+  try { s = await (await fetch("/status")).json(); } catch(e){ return; }
+  const pill = (label, ok) =>
+    `<span class="pill"><span class="dot ${ok?'ok':'no'}"></span>${label}</span>`;
+  $("#statusBar").innerHTML =
+    pill("Whisper engine", s.whisper) + pill("ffmpeg", s.ffmpeg) +
+    pill(s.model_ready ? "Model ready" : "No model yet", s.model_ready);
+
+  // Never interrupt an in-progress job or a shown result.
+  if (jobCard.style.display === "block" || resultCard.style.display === "block") return;
+
+  if (s.download && s.download.active) {
+    if (screen !== "download") { showScreen("download"); trackDownload(); }
+    return;
+  }
+  if (!s.has_models) {
+    $("#pickBack").style.display = "none";
+    if (screen !== "picker") { showScreen("picker"); loadModels(); }
+    return;
+  }
+  if (s.model) {
+    modelBadge.innerHTML = `Model: <strong>${prettyModel(s.model)}</strong> · <a id="changeModel">change</a>`;
+  }
+  if (!manualPicker && screen !== "drop") showScreen("drop");
+}
+
+async function loadModels(){
+  let data;
+  try { data = await (await fetch("/models")).json(); } catch(e){ return; }
+  const rec = "large-v3-turbo";
+  $("#modelList").innerHTML = data.catalog.map(m => {
+    const right = m.active
+      ? `<span class="mc-active">✓ in use</span>`
+      : (m.installed
+          ? `<button class="btn" data-use="${m.filename}">Use</button>`
+          : `<button class="btn primary" data-get="${m.name}">Download</button>`);
+    const recTag = m.name === rec ? `<span class="rec">recommended</span>` : "";
+    const size = m.size_mb >= 1024 ? (m.size_mb/1024).toFixed(1)+" GB" : m.size_mb+" MB";
+    return `<div class="model-card">
+      <div class="mc-main">
+        <div class="mc-name">${m.label}${recTag}</div>
+        <div class="mc-note">${m.note}</div>
+      </div>
+      <div class="mc-size">${size}</div>
+      <div>${right}</div>
+    </div>`;
+  }).join("");
+}
+
+async function startDownload(name){
+  const r = await fetch("/download_model", {method:"POST",
+    headers:{"Content-Type":"application/json"}, body: JSON.stringify({name})});
+  if (!r.ok){ const e = await r.json().catch(()=>({})); alert(e.error || "Could not start download."); return; }
+  manualPicker = false;
+  showScreen("download");
+  trackDownload();
+}
+
+function trackDownload(){
+  if (dlTimer) clearInterval(dlTimer);
+  dlTimer = setInterval(async () => {
+    let s; try { s = await (await fetch("/status")).json(); } catch(e){ return; }
+    const d = s.download || {};
+    $("#dlName").textContent = "Downloading model: " + (d.name || "");
+    $("#dlMeta").textContent = (d.pct||0) + "%";
+    $("#dlBar").style.width = (d.pct||0) + "%";
+    $("#dlPhase").textContent = `Downloading… ${d.pct||0}% (one-time)`;
+    if (d.error){ clearInterval(dlTimer); $("#dlErr").style.display="block"; $("#dlErr").textContent = "Download failed: " + d.error + " — check your connection and try again."; showScreen("picker"); loadModels(); $("#pickBack").style.display = s.has_models ? "block":"none"; }
+    if (!d.active && s.model_ready){ clearInterval(dlTimer); refreshStatus(); }
+  }, 600);
+}
+
+async function selectModel(filename){
+  await fetch("/select_model", {method:"POST",
+    headers:{"Content-Type":"application/json"}, body: JSON.stringify({filename})});
+  manualPicker = false;
+  refreshStatus();
+}
+
+// delegated clicks for model cards + change/back links
+document.addEventListener("click", (e) => {
+  const get = e.target.closest("[data-get]");
+  if (get){ startDownload(get.getAttribute("data-get")); return; }
+  const use = e.target.closest("[data-use]");
+  if (use){ selectModel(use.getAttribute("data-use")); return; }
+  if (e.target.id === "changeModel"){ e.preventDefault(); manualPicker = true; $("#pickBack").style.display="block"; showScreen("picker"); loadModels(); return; }
+  if (e.target.id === "pickBackLink"){ manualPicker = false; showScreen("drop"); return; }
+});
+
+refreshStatus(); setInterval(refreshStatus, 4000);
+
+// --- drag & drop ---
+["dragenter","dragover"].forEach(ev =>
+  drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave","drop"].forEach(ev =>
+  drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", e => {
+  if (e.dataTransfer.files.length) upload(e.dataTransfer.files[0]);
+});
+drop.addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", () => {
+  if (fileInput.files.length) upload(fileInput.files[0]);
+});
+
+function humanSize(b){ if(b<1024)return b+" B"; if(b<1048576)return (b/1024).toFixed(0)+" KB";
+  if(b<1073741824)return (b/1048576).toFixed(1)+" MB"; return (b/1073741824).toFixed(2)+" GB"; }
+
+function setPhase(text, withSpinner=true){
+  $("#phaseText").textContent = text;
+  $(".spinner").style.display = withSpinner ? "inline-block" : "none";
+}
+
+async function upload(file){
+  resultCard.style.display = "none";
+  jobCard.style.display = "block";
+  $("#errBox").style.display = "none";
+  $("#jobName").textContent = file.name;
+  $("#jobMeta").textContent = humanSize(file.size);
+  $("#barFill").style.width = "0%";
+  setPhase("Uploading…");
+
+  const fd = new FormData();
+  fd.append("file", file);
+  let res;
+  try {
+    res = await fetch("/upload", { method:"POST", body: fd });
+  } catch(e){ return showError("Upload failed: " + e.message); }
+  if(!res.ok){ return showError("Upload rejected by server."); }
+  const { job_id } = await res.json();
+  setPhase("Queued…");
+  startPolling(job_id);
+}
+
+function startPolling(jobId){
+  if (poll) clearInterval(poll);
+  poll = setInterval(async () => {
+    let j;
+    try { j = await (await fetch("/progress/"+jobId)).json(); }
+    catch(e){ return; }
+    if (j.error && j.status === undefined) return;
+
+    $("#barFill").style.width = (j.progress||0) + "%";
+    const phases = { queued:"Queued…", extracting:"Extracting audio…",
+                     transcribing:"Transcribing", done:"Done", error:"Error" };
+    let label = phases[j.status] || j.status;
+    if (j.status === "transcribing") label = `Transcribing… ${j.progress}%`;
+    setPhase(label, j.status !== "done" && j.status !== "error");
+
+    if (j.status === "error"){ clearInterval(poll); showError(j.error || "Something went wrong."); }
+    if (j.status === "done"){ clearInterval(poll); showResult(jobId, j); }
+  }, 700);
+}
+
+function showError(msg){
+  if (poll) clearInterval(poll);
+  setPhase("Failed", false);
+  const e = $("#errBox"); e.style.display = "block"; e.textContent = msg;
+}
+
+function showResult(jobId, j){
+  jobCard.style.display = "none";
+  resultCard.style.display = "block";
+  $("#outMd").textContent = j.md_text || "";
+  $("#outSrt").textContent = j.srt_text || "";
+  $("#dlMd").href = `/download/${jobId}/md`;
+  $("#dlSrt").href = `/download/${jobId}/srt`;
+  $("#dlMd").setAttribute("download", j.download_base + ".md");
+  $("#dlSrt").setAttribute("download", j.download_base + ".srt");
+}
+
+// tabs
+document.querySelectorAll(".tab").forEach(t =>
+  t.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+    t.classList.add("active");
+    const md = t.dataset.tab === "md";
+    $("#outMd").style.display = md ? "block":"none";
+    $("#outSrt").style.display = md ? "none":"block";
+  }));
+
+$("#copyBtn").addEventListener("click", () => {
+  const md = $("#outMd").style.display !== "none";
+  navigator.clipboard.writeText((md ? $("#outMd") : $("#outSrt")).textContent);
+  $("#copyBtn").textContent = "Copied ✓";
+  setTimeout(()=> $("#copyBtn").textContent = "Copy current view", 1500);
+});
+$("#againBtn").addEventListener("click", () => {
+  resultCard.style.display = "none"; fileInput.value = "";
+  showScreen("drop");
+});
+</script>
+</body>
+</html>

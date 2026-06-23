@@ -1,0 +1,23 @@
+# Models are large (75MB–1.5GB) — never commit them; the app downloads them.
+models/
+*.bin
+
+# Runtime / generated
+uploads/
+outputs/
+config.json
+__pycache__/
+*.pyc
+
+# Build output
+build/
+dist/
+*.spec
+.icon_build/AppIcon.iconset/
+.modelhide/
+
+# The locally-built Mac app (CI produces the distributable instead)
+Whisper Transcript.app/
+
+# OS cruft
+.DS_Store
